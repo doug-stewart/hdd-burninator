@@ -48,22 +48,7 @@ Find drive names with `lsblk -o NAME,SIZE,MODEL,SERIAL,ROTA`.
 
 ### While it runs
 
-The progress table refreshes every 30 seconds:
-
-```
-hdd-burninator   running 1d 04h 12m   updated 2026-11-05 19:40
-
-┌───────┬──────────┬──────────────────────┬───────────────────────────┬───────┬───────────┬────────┐
-│ Drive │ Serial   │ Step                 │ Progress                  │ Temp  │ Time left │ Errors │
-├───────┼──────────┼──────────────────────┼───────────────────────────┼───────┼───────────┼────────┤
-│ sda   │ 9LG1A2BC │ 2/4 badblocks write  │ ███████████░░░░░░░░░  56% │ 39°C  │ ~22h 10m  │ 0      │
-│ sdb   │ 9LG3D4EF │ 2/4 badblocks write  │ ██████████░░░░░░░░░░  52% │ 41°C  │ ~23h 05m  │ 0      │
-│ sdc   │ 9LG5G6HI │ 2/4 badblocks write  │ ███████████░░░░░░░░░  55% │ 43°C  │ ~22h 30m  │ 0      │
-│ sdd   │ 9LG7J8KL │ 3/4 badblocks verify │ ███░░░░░░░░░░░░░░░░░  14% │ 46°C! │ ~12h 40m  │ 3      │
-└───────┴──────────┴──────────────────────┴───────────────────────────┴───────┴───────────┴────────┘
-```
-
-Temperatures at or above 45°C are marked with `!`. Add airflow if you see them, especially on a test bench.
+The progress table refreshes every 30 seconds and shows each drive's step, progress, temperature, time left and error count. Temperatures at or above 45°C are marked with `!`. Add airflow if you see them, especially on a test bench.
 
 **The tests run in the background.** Pressing Ctrl-C, closing the browser shell or dropping SSH only closes the view. Reopen it any time with:
 
@@ -73,26 +58,7 @@ sudo bash hdd-burninator.sh --status
 
 ### Results
 
-When every drive is finished, the results are printed as a table:
-
-```
-hdd-burninator   finished in 2d 06h 41m
-
-┌───────┬─────────────────┬──────────┬────────┬────────────┬───────────┬─────────┬─────────────┬──────────┬────────┐
-│ Drive │ Model           │ Serial   │ Size   │ SMART long │ badblocks │ Defects │ Uncorrected │ Max temp │ Result │
-├───────┼─────────────────┼──────────┼────────┼────────────┼───────────┼─────────┼─────────────┼──────────┼────────┤
-│ sda   │ WUH721414AL5204 │ 9LG1A2BC │ 12.7T  │ Passed     │ 0 bad     │ 0 → 0   │ 0 → 0       │ 41°C     │ PASS   │
-│ sdb   │ WUH721414AL5204 │ 9LG3D4EF │ 12.7T  │ Passed     │ 0 bad     │ 0 → 0   │ 0 → 0       │ 42°C     │ PASS   │
-│ sdc   │ WUH721414AL5204 │ 9LG5G6HI │ 12.7T  │ Passed     │ 0 bad     │ 12 → 12 │ 0 → 0       │ 43°C     │ WARN   │
-│ sdd   │ WUH721414AL5204 │ 9LG7J8KL │ 12.7T  │ Passed     │ 3 bad     │ 0 → 7   │ 0 → 3       │ 46°C     │ FAIL   │
-└───────┴─────────────────┴──────────┴────────┴────────────┴───────────┴─────────┴─────────────┴──────────┴────────┘
-
-Details
-  sdc    WARN        12 defect(s) were already present before the test; none were added during it
-  sdd    FAIL        badblocks found 3 bad block(s); defects rose 0 → 7; uncorrected errors rose 0 → 3
-
-4 drive(s) tested: 2 passed, 1 passed with warnings, 1 failed.
-```
+When every drive is finished, the results are printed as a table: model, serial, size, SMART long test result, badblocks result, defects and uncorrected errors (before → after), max temperature and PASS / WARN / FAIL, followed by details for any drive that didn't pass.
 
 If you closed the view before it finished, run `--status` to see the results.
 
