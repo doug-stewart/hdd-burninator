@@ -82,5 +82,4 @@ None are left behind. While the test runs, progress is tracked in `/run/hdd-burn
 ## Notes
 
 - Drives over 16TB automatically use an 8192-byte badblocks block size, because badblocks can't address them with 4K blocks.
-- Colors and box-drawing characters are used when the terminal supports them, with a plain-ASCII fallback otherwise.
 - Requires `smartctl`, `badblocks`, `lsblk`, `blockdev`, `setsid`, `stat` and `zpool`, all included in TrueNAS.
