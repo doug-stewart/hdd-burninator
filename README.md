@@ -1,45 +1,44 @@
 # hdd-burninator
 
-Burn-in test for new or refurbished hard drives on **TrueNAS (Community Edition / SCALE)**, or any Linux box with `smartctl` and `badblocks`. It tests every drive in parallel and gives a live progress display and a pass/fail report at the end.
+Burn-in test for new or refurbished hard drives on **TrueNAS (Community Edition / SCALE)**, or any Linux box with `smartctl` and `badblocks`. It tests every drive in parallel, shows live progress, and prints a pass/fail table in the console when it's done.
 
-Use it on new drives **before** you put data on them, while you can still return any that are bad.
-
-> ⚠️ **This erases every drive it tests.** Don't run it on drives with data you want to keep. It refuses to touch drives in an imported ZFS pool (including the boot drive) and asks you to type `ERASE` before starting.
+> ⚠️ **This erases every drive it tests.** It refuses to touch drives in an imported ZFS pool (including the boot drive) and asks you to type `ERASE` before it starts.
 
 ## What it does
 
 For each drive, all at the same time:
 
-1. **Baseline SMART snapshot:** saves the drive's health and error counters.
-2. **SMART extended (long) self-test:** the drive's own full surface scan.
-3. **badblocks write and verify:** writes random data to every block, then reads it all back and compares (one pass).
-4. **Final SMART snapshot:** compares error counters against the baseline.
+1. **SMART long test:** the drive's own full surface self-test.
+2. **badblocks write:** writes random data to every block.
+3. **badblocks verify:** reads every block back and compares it.
+4. **Final SMART check:** compares error counters against the values from the start.
 
-Works with **SAS and SATA** drives. Their SMART output differs, and the script handles both.
+Works with **SAS and SATA** drives.
 
-A drive **FAILS** if:
-- the SMART long test fails or is aborted
-- badblocks finds bad blocks or read/write/compare errors
-- SMART health isn't `PASSED`/`OK`
-- any error counter goes up during the test: SAS grown defect list or uncorrected errors, SATA reallocated, pending or offline-uncorrectable sectors
+| Result | Meaning |
+|---|---|
+| **PASS** | Every check passed. |
+| **WARN** | Passed, but the drive already had defects or uncorrected errors logged before the test. None were added during it. Common on refurbished drives. |
+| **FAIL** | The SMART long test failed or was aborted, badblocks found bad blocks or errors, SMART health isn't OK, or defects or uncorrected errors increased during the test. |
+| **INCOMPLETE** | The test stopped partway (reboot, power loss, or it was killed). |
 
-A drive gets a **WARN** if a counter was already nonzero before the test but didn't change, which is common on refurbished drives.
+**Defects** are the grown defect list on SAS drives, or reallocated sectors on SATA drives. **Uncorrected** is uncorrected read/write/verify errors on SAS drives, or pending + offline-uncorrectable + reported-uncorrectable sectors on SATA drives.
 
 ## Usage
 
-Download it (don't pipe it into bash):
+Download it (piping it into bash isn't supported):
 
 ```bash
-curl -LO https://raw.githubusercontent.com/OWNER/REPO/main/hdd-burninator.sh
+curl -LO https://raw.githubusercontent.com/doug-stewart/hdd-burninator/main/hdd-burninator.sh
 ```
 
-Run it on every spinning drive. SSDs, NVMe, USB sticks and the boot drive are skipped automatically:
+Test every spinning drive. SSDs, NVMe, USB sticks and the boot drive are skipped automatically:
 
 ```bash
 sudo bash hdd-burninator.sh
 ```
 
-Or on specific drives only:
+Or test only specific drives:
 
 ```bash
 sudo bash hdd-burninator.sh sda sdb sdc sdd
@@ -47,46 +46,40 @@ sudo bash hdd-burninator.sh sda sdb sdc sdd
 
 Find drive names with `lsblk -o NAME,SIZE,MODEL,SERIAL,ROTA`.
 
-### Progress display
+### While it runs
 
-The display refreshes every 30 seconds and shows each drive's step, progress, temperature and estimated time left.
+The progress table refreshes every 30 seconds and shows each drive's step, progress, temperature, time left and error count. Temperatures at or above 45°C are marked with `!`. Add airflow if you see them, especially on a test bench.
 
-**The tests run in the background.** Pressing Ctrl-C, closing the browser shell or dropping SSH only closes the display. Reopen it any time with:
+**The tests run in the background.** Pressing Ctrl-C, closing the browser shell or dropping SSH only closes the view. Reopen it any time with:
 
 ```bash
 sudo bash hdd-burninator.sh --status
 ```
 
-Temperatures at or above 45°C are flagged with `!`. Add airflow if you see them, especially on a test bench.
+### Results
+
+When every drive is finished, the results are printed as a table: model, serial, size, SMART long test result, badblocks result, defects and uncorrected errors (before → after), max temperature and PASS / WARN / FAIL, followed by details for any drive that didn't pass.
+
+If you closed the view before it finished, run `--status` to see the results.
 
 ### Options
 
 | Option | Meaning |
 |---|---|
-| `--status [DIR]` | Reopen the progress display (default: latest run) |
+| `--status` | Reopen the progress view, or show the results of a finished run |
 | `--skip-smart` | Skip the SMART long test and go straight to badblocks |
-| `--refresh SEC` | Display refresh interval (default 30) |
+| `--refresh SEC` | Progress view refresh interval (default 30) |
 | `-h`, `--help` | Help |
 
 ## How long it takes
 
-Roughly **2–3 days** for 12–18TB drives: about a day for the SMART long test, plus 1–1½ days for the badblocks write and verify pass. All drives run in parallel, so four drives take about as long as one.
+Roughly **2–3 days** for 12–18TB drives: about a day for the SMART long test, then 1–1½ days for the badblocks write and verify passes. Drives run in parallel, so four drives take about as long as one.
 
-## Output
+## Files
 
-Each run gets a folder under `/root/burninator/<date_time>/`, and `/root/burninator/latest` points at the newest one:
-
-```
-summary.txt                  final pass/fail report
-sda/worker.log               timeline of what happened
-sda/smart_before.txt         SMART at start (smart_before_full.txt = smartctl -x)
-sda/smart_after.txt          SMART at end
-sda/badblocks.log            badblocks output
-sda/badblocks_bad.txt        list of bad blocks (empty = good)
-```
+None are left behind. While the test runs, progress is tracked in `/run/hdd-burninator`, which lives in memory and is cleared on reboot. It's deleted once the results have been shown.
 
 ## Notes
 
-- Drives larger than 16TB automatically use an 8192-byte block size, since badblocks can't address them with 4K blocks.
-- Return any drive that FAILS within the seller's return window.
-- Requires `smartctl`, `badblocks`, `lsblk`, `blockdev`, `setsid` and `zpool`, all included in TrueNAS.
+- Drives over 16TB automatically use an 8192-byte badblocks block size, because badblocks can't address them with 4K blocks.
+- Requires `smartctl`, `badblocks`, `lsblk`, `blockdev`, `setsid`, `stat` and `zpool`, all included in TrueNAS.
